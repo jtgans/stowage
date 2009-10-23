@@ -1,0 +1,145 @@
+#!/bin/bash
+
+[ -f /etc/rc.d/rc.conf ] && source /etc/rc.d/rc.conf
+[ -f /etc/rc.d/include/rc.functions ] && source /etc/rc.d/include/rc.functions
+[ -f /etc/rc.d/stowage.conf ] && source /etc/rc.d/stowage.conf
+
+install_pkg()
+{
+    if [ "$1" ]; then
+        if [ -e $STOWAGE_DIR/$1 ]; then
+            for file in `find $STOWAGE_DIR/$1`; do
+		DEST=`echo $file |sed "s|^$STOWAGE_DIR/$1|/|g"`
+
+                if [ -d $file ]; then
+                    if [ ! -d $DEST ]; then
+                       mkdir -p $DEST
+		    fi
+		elif [ -f $file ]; then
+     		    if [ ! -f $DEST ]; then
+                        if [ "`file $file |grep 'shared object'`" ]; then
+				ln $file $DEST
+			else 
+				ln -s $file $DEST
+			fi
+		    else
+			color_echo 'error' "$DEST and $file collide!"
+		    fi
+		fi
+	    done	
+        else
+            color_echo 'error' "Package $1 does not exist in the $STOWAGE_DIR directory"
+            exit 1
+        fi
+    else
+	echo "Usage:"
+        echo "    stowage install <package_name>"
+        echo ""
+        echo "stowage install will install the symlinks needed to run a package"
+        echo "that has been installed into the $STOWAGE_DIR heirarchy."
+	exit 1
+    fi
+    exit 0
+}
+
+uninstall_pkg()
+{
+    if [ "$1" ]; then
+        if [ -e $STOWAGE_DIR/$1 ]; then
+            for file in `find $STOWAGE_DIR/$1`; do
+                DEST=`echo $file |sed "s|^$STOWAGE_DIR/$1|/|g"`
+
+		if [ -d $file ]; then
+		    if [ -d $DEST ]; then
+			if [ ! "`/bin/ls $DEST`" ]; then
+                            rmdir $DEST
+			else
+			    color_echo 'warn' "$DEST is not empty -- not removing"
+			fi
+		    fi
+		elif [ -f $file ]; then
+		    if [ -f $DEST ]; then
+			rm $DEST
+		    else
+			color_echo 'warn' "$DEST does not exist"
+		    fi
+		fi
+	    done
+	else
+	    color_echo 'error' "Package $1 does not exist in the $STOWAGE_DIR directory"
+	    exit 1
+	fi
+    else
+	echo "Usage:"
+	echo "    stowage uninstall <package_name>"
+	echo ""
+	echo "stowage uninstall will remove the symlinks for a package made by"
+	echo "stowage install. Note that this only removes the symlinks -- not"
+	echo "the actual files from the system."
+	exit 1
+    fi
+    exit 0
+}
+
+status()
+{
+    if [ "$1" ]; then
+        if [ -e $STOWAGE_DIR/$1 ]; then
+            for file in `find $STOWAGE_DIR/$1`; do
+                DEST=`echo $file |sed "s|^$STOWAGE_DIR/$1|/|g"`
+
+		if [ -e $DEST ]; then
+		    color_echo 'success' "$file => $DEST"
+		else
+		    color_echo 'error' "$file => $DEST -- missing"
+		fi
+	    done
+	else
+	    color_echo 'error' "Package $1 does not exist in the $STOWAGE_DIR directory"
+	    exit 1
+	fi
+    else
+	echo "Usage:"
+	echo "    stowage status <package_name>"
+	echo ""
+	echo "stowage status will show the status of the symlinks that stowage"
+	echo "install creates for a package."
+	exit 1
+    fi
+    exit 0
+}
+
+remove()
+{
+    if [ -e $STOWAGE_DIR/$1 ]; then
+	rm -rf $STOWAGE_DIR/$1
+    else
+        color_echo 'error' "Package $1 does not exist in the $STOWAGE_DIR directory"
+	exit 1
+    fi
+}
+
+case $1 in
+    install)
+        install_pkg $2
+        ;;
+    uninstall)
+        uninstall_pkg $2
+        ;;
+    remove)
+        uninstall_pkg $2
+        remove $2
+	;;
+    update)
+        update $2
+        ;;
+    clean)
+        clean $2
+        ;;
+    status)
+	status $2
+	;;
+    *)
+        display_help
+        ;;
+esac

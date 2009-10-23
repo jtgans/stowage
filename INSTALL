@@ -1,0 +1,7 @@
+Installation instructions for Stowage:
+
+	[foo@bar]$ su -
+	Password:
+	[foo@bar]# make install
+	
+More help can be obtained by just typing in 'make'.

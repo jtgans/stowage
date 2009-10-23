@@ -1,0 +1,105 @@
+#!/bin/bash
+
+color_echo()
+{
+   ARG1=$1
+   shift
+   ARG2=$*
+   
+   if [ "$COLOR" == "yes" ] || [ "$COLOR" == "YES" ]; then
+      case $ARG1 in
+         'error'|'ERROR')
+            STRING=$(echo -e ' [\033[01;31m!\033[00m]')
+	    ;;
+         'warn'|'WARN')
+            STRING=$(echo -e ' [\033[01;33m*\033[00m]')
+	    ;;
+	 'success'|'SUCCESS')
+	    STRING=$(echo -e ' [\033[01;32m*\033[00m]')
+	    ;;
+         'info'|'INFO')
+            STRING=$(echo -e ' [\033[01;32m.\033[00m]')
+	    ;;
+	 *)
+	    STRING=' [?]'
+	    ;;
+      esac
+   else
+      case $ARG1 in
+         'error'|'ERROR')
+	    STRING=' [!]'
+	    ;;
+	 'warn'|'WARN')
+	    STRING=' [*]'
+	    ;;
+	 'info'|'INFO')
+	    STRING=' [.]'
+	    ;;
+	 'success'|'SUCCESS')
+	    STRING=' [*]'
+	    ;;
+	 *)
+	    STRING=' [?]'
+	    ;;
+      esac
+   fi
+   
+   echo "$STRING $ARG2"
+   return
+}
+
+requires()
+{
+    while SVC=$1; shift 1; do
+        RESULTS=`grep -s $SVC /var/run/rc_startup_path`
+ 
+        if [ -z "$RESULTS" ]; then
+            export $SERVICE_VAR="${!SERVICE_VAR} $SVC"
+        fi
+    done
+}
+
+start_service()
+{
+    RESULTS=`echo $RC_STARTUP_PATH |grep -s $1`
+    if [ "$?" == "0" ]; then
+        return 0
+    fi
+
+    if [ -f /etc/rc.d/init.d/$1 ]; then
+	export SERVICE=$1
+	export SERVICE_VAR=NEEDS_$SERVICE
+	
+        source /etc/rc.d/init.d/$SERVICE
+
+	deps
+	for requirement in ${!SERVICE_VAR}; do
+            start_service $requirement
+        done
+
+        start_$1
+
+	export RC_STARTUP_PATH="$RC_STARTUP_PATH $1"
+    else
+        color_echo 'error' "Unable to start service $1 -- /etc/rc.d/init.d/$1 does not exist!"
+	exit 1
+    fi
+}
+
+stop_service()
+{
+    export SERVICE=$1
+    export SERVICE_VAR=NEEDS_$SERVICE
+
+    source /etc/rc.d/init.d/$1
+
+    stop_$1
+
+    export RC_STARTUP_PATH=`echo $RC_STARTUP_PATH |grep -s -v $1`
+
+    deps
+    for requirement in ${!SERVICE_VAR}; do
+        stop_service $requirement
+    done
+}
+    
